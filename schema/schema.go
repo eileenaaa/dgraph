@@ -106,6 +106,7 @@ func (s *state) Delete(attr string, ts uint64) error {
 
 	glog.Infof("Deleting schema for predicate: [%s]", attr)
 	txn := pstore.NewTransactionAt(ts, true)
+	defer txn.Discard()
 	if err := txn.Delete(x.SchemaKey(attr)); err != nil {
 		return err
 	}
@@ -130,6 +131,7 @@ func (s *state) DeleteType(typeName string, ts uint64) error {
 
 	glog.Infof("Deleting type definition for type: [%s]", typeName)
 	txn := pstore.NewTransactionAt(ts, true)
+	defer txn.Discard()
 	if err := txn.Delete(x.TypeKey(typeName)); err != nil {
 		return err
 	}
@@ -541,7 +543,7 @@ func Load(predicate string) error {
 	if len(predicate) == 0 {
 		return errors.Errorf("Empty predicate")
 	}
-	delete(State().mutSchema, predicate)
+	State().DeleteMutSchema(predicate)
 	key := x.SchemaKey(predicate)
 	txn := pstore.NewTransactionAt(math.MaxUint64, false)
 	defer txn.Discard()

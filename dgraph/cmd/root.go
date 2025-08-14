@@ -155,6 +155,7 @@ func initCmds() {
 			if err != nil {
 				x.Fatalf("unable to open config file for reading: %v", err)
 			}
+			defer cfgFile.Close()
 			cfgData, err := io.ReadAll(cfgFile)
 			if err != nil {
 				x.Fatalf("unable to read config file: %v", err)

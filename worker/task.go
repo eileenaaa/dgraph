@@ -803,12 +803,19 @@ func (qs *queryState) handleUidPostings(
 	errCh := make(chan error, numGo)
 	outputs := make([]*pb.Result, numGo)
 
+	cctx, ccancel := context.WithCancel(ctx)
+	defer ccancel()
 	calculate := func(start, end int) error {
 		x.AssertTrue(start%width == 0)
 		out := &pb.Result{}
 		outputs[start/width] = out
 
 		for i := start; i < end; i++ {
+			select {
+			case <-cctx.Done():
+				return cctx.Err()
+			default:
+			}
 			if i%100 == 0 {
 				select {
 				case <-ctx.Done():
@@ -956,7 +963,13 @@ func (qs *queryState) handleUidPostings(
 			end = srcFn.n
 		}
 		go func(start, end int) {
-			errCh <- calculate(start, end)
+			if err := calculate(start, end); err != nil {
+				errCh <- err
+				ccancel()
+				return
+			} else {
+				errCh <- nil
+			}
 		}(start, end)
 	}
 	for range numGo {
@@ -1581,11 +1594,18 @@ func (qs *queryState) filterGeoFunction(ctx context.Context, arg funcArgs) error
 			len(uids.Uids), numGo, width)
 	}
 
+	cctx, ccancel := context.WithCancel(ctx)
+	defer ccancel()
 	filtered := make([]*pb.List, numGo)
 	filter := func(idx, start, end int) error {
 		filtered[idx] = &pb.List{}
 		out := filtered[idx]
 		for _, uid := range uids.Uids[start:end] {
+			select {
+			case <-cctx.Done():
+				return cctx.Err()
+			default:
+			}
 			pl, err := qs.cache.Get(x.DataKey(attr, uid))
 			if err != nil {
 				return err
@@ -1615,7 +1635,13 @@ func (qs *queryState) filterGeoFunction(ctx context.Context, arg funcArgs) error
 			end = len(uids.Uids)
 		}
 		go func(idx, start, end int) {
-			errCh <- filter(idx, start, end)
+			if err := filter(idx, start, end); err != nil {
+				errCh <- err
+				ccancel()
+				return
+			} else {
+				errCh <- nil
+			}
 		}(i, start, end)
 	}
 	for range numGo {
